@@ -32,8 +32,14 @@ official release.   For FPP, run "make menuconfig" as we need to change a few th
 * Network support
  * turn off CAN bus subsystem 
  * turn off amateur radio support
+* Device Drivers 
+ * Turn OFF "Watchdog Timer Support"
 * Device drivers -> Remoteproc drivers
  * Turn OFF AMx3xx Wakeup M3 remoteproc support
+* Device Drivers -> Real Time Clock
+ * Turn OFF the TI OMAP RTC
+* Device Drivers -> Pulse  Width Modulation
+ * Turn OFF the OMAP Dual Mode Timer PWM
 
 
 # Building on Beaglebone
