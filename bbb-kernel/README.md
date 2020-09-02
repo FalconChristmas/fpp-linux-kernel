@@ -13,7 +13,7 @@ This kernel repo is very large so it might be best to checkout on a desktop and
 transfer the Beagle.
 
 Then swith to the appropriate tag.  For example:
-git checkout 4.19.94-ti-r43
+git checkout 4.19.94-ti-r50
 
 Copy the current config from a beagle by grabbing the /proc/config.gz, uncompressing it, and 
 sticking that as .config.   You should now be able to build a kernel identical to the 
