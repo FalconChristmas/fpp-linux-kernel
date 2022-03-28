@@ -10,10 +10,12 @@ slower.
 The first step is to checkout the latest Beaglebone kernel sources via:
 git clone git://github.com/beagleboard/linux.git
 This kernel repo is very large so it might be best to checkout on a desktop and
-transfer the Beagle.
+transfer the Beagle.  The other option is to clone the specific tag without the history
+which is a little bit faster:
+git clone --depth 1 --branch 5.10.100-ti-r40 https://github.com/beagleboard/linux
 
 Then swith to the appropriate tag.  For example:
-git checkout 5.4.106-ti-r31
+git checkout 5.10.100-ti-r40
 
 Copy the default config for a beagle by:
 cp ./arch/arm/configs/bb.org_defconfig .config
@@ -21,7 +23,8 @@ You should now be able to build a kernel identical to the
 official release.   For FPP, run "make menuconfig" as we need to change a few things:
 * General Setup -> 
   * Disable initrd support - we dont use it, slows boot down a bit
-  * Local Version -> fpp
+  * Local Version -> -fpp
+   (note: the dash prefix is important)
 * Kernel Features
   * Increase timer to 500hz
   * Disable SMP support - beaglebone blacks are single core
