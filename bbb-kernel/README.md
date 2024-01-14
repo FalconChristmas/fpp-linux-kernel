@@ -6,24 +6,32 @@ release, the debs must be built on an armv7 device.  The fastest option is to us
 a Beaglebone AI to build the deb, but it can be done on a Beaglebone Black, just much
 slower.
 
+It will require a significant amount of memory.   Thus, a swapfile will need to be created:
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+sudo sysctl vm.swappiness=10
+
+
 # Required Kernel Changes
 The first step is to checkout the latest Beaglebone kernel sources via:
-git clone git://github.com/beagleboard/linux.git
-This kernel repo is very large so it might be best to checkout on a desktop and
-transfer the Beagle.  The other option is to clone the specific tag without the history
-which is a little bit faster:
-git clone --depth 1 --branch 5.10.162-ti-r59 https://github.com/beagleboard/linux
-
+git clone https://openbeagle.org/RobertCNelson/bb-kernel
 Then swith to the appropriate tag.  For example:
-git checkout 5.10.162-ti-r59
+git checkout am33x-v6.7
 
-Copy the default config for a beagle by:
-cp ./arch/arm/configs/bb.org_defconfig .config
-You should now be able to build a kernel identical to the 
-official release.   For FPP, run "make menuconfig" as we need to change a few things:
+Copy our latest config for a beagle to:
+patches/defconfig
+patches/ref_omap2plus_defconfig
 
-*I2C Address Translator (ATR) support turn on
+Edit version.sh to change:
+build_prefix="-fpp"
+toolchain="gcc_12_arm"
+comment out DISTRO=
 
+Run ./build_deb.sh
+
+If you need to completely recreate the config, the options we need are:
 * General Setup -> 
   * Disable initrd support - we dont use it, slows boot down a bit
   * Local Version -> -fpp
