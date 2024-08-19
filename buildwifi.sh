@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export BASEVER=6.6.25-fpp14
+export BASEVER=6.6.44-fpp16
 export KVER="${BASEVER}_1"
 export CROSS_COMPILE=/home/dkulp/working/bb-kernel/dl/gcc-13.2.0-nolibc/arm-linux-gnueabi/bin/arm-linux-gnueabi-
 export ARCH=arm
@@ -48,8 +48,8 @@ cd ..
 rm -rf rtl8723au
 
 
-git clone https://github.com/morrownr/8812au-20210629
-cd 8812au-20210629
+git clone https://github.com/morrownr/8812au-20210820
+cd 8812au-20210820
 sed -i 's/I386_PC = y/I386_PC = n/' Makefile
 sed -i 's/ARM_RPI = n/ARM_RPI = y/' Makefile
 sed -i 's/KVER *:= $(shell uname -r)/KVER ?= $(shell uname -r)/' Makefile
@@ -58,7 +58,7 @@ sed -i 's/CROSS_COMPILE *:=/CROSS_COMPILE ?=/' Makefile
 make -j 8
 cp -f 8812au.ko ../wireless
 cd ..
-rm -rf  8812au-20210629
+rm -rf  8812au-20210820
 
 
 git clone https://github.com/morrownr/8814au
