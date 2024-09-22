@@ -124,19 +124,21 @@ cd ..
 rm -rf rtl8188fu
 
 
-# git clone https://github.com/lwfinger/rtl8192cu
-# cd rtl8192cu
-# export USER_EXTRA_CFLAGS="-DCONFIG_LITTLE_ENDIAN -Wno-error=incompatible-pointer-types"
-# sed -i 's/I386_PC = y/I386_PC = n/' Makefile
-# sed -i 's/ARM_RPI = n/ARM_RPI = y/' Makefile
-# sed -i 's/KVER *:= $(shell uname -r)/KVER ?= $(shell uname -r)/' Makefile
-# sed -i 's/KSRC *:= /KSRC ?= /' Makefile
-# sed -i 's/CROSS_COMPILE *:=/CROSS_COMPILE ?=/' Makefile
-# make -j 8
-# unset USER_EXTRA_CFLAGS
-# cp rtl8192cu.ko ../wireless
-# cd ..
-# rm -rf rtl8192cu
+git clone https://github.com/lwfinger/rtl8192cu
+cd rtl8192cu
+export USER_EXTRA_CFLAGS="-DCONFIG_LITTLE_ENDIAN -Wno-error=incompatible-pointer-types"
+sed -i 's/I386_PC = y/I386_PC = n/' Makefile
+sed -i 's/ARM_RPI = n/ARM_RPI = y/' Makefile
+sed -i 's/KVER *:= $(shell uname -r)/KVER ?= $(shell uname -r)/' Makefile
+sed -i 's/KSRC *:= /KSRC ?= /' Makefile
+sed -i 's/CROSS_COMPILE *:=/CROSS_COMPILE ?=/' Makefile
+sed -i 's/MODULE_NAME = rtl8192cu/MODULE_NAME = 8192cu/' Makefile
+sed -i 's|hal/\$(MODULE_NAME)|hal/rtl8192cu|' Makefile
+make -j 8
+unset USER_EXTRA_CFLAGS
+cp 8192cu.ko ../wireless
+cd ..
+rm -rf rtl8192cu
 
 
 git clone https://github.com/lwfinger/rtl8723bu
