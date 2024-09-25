@@ -1,10 +1,11 @@
 #!/bin/bash
 
-export BASEVER=6.6.44-fpp16
+#export BASEVER=6.6.44-fpp16
+export BASEVER=6.11.0-fpp7
 export KVER="${BASEVER}_1"
 export CROSS_COMPILE=/home/dkulp/working/bb-kernel/dl/gcc-13.2.0-nolibc/arm-linux-gnueabi/bin/arm-linux-gnueabi-
 export ARCH=arm
-export KSRC="/home/dkulp/working/bb-kernel/KERNEL/debian/linux-headers/usr/src/linux-headers-${BASEVER}"
+export KSRC="/home/dkulp/working/bb-kernel/KERNEL/debian/linux-headers-${BASEVER}/usr/src/linux-headers-${BASEVER}"
 
 
 mkdir -p wireless
@@ -109,8 +110,7 @@ cp -f 8188eu.ko ../wireless
 cd ..
 rm -rf rtl8188eu
 
-
-git clone https://github.com/FoxtrotGolf/rtl8188fu
+git clone https://github.com/kelebek333/rtl8188fu
 cd rtl8188fu
 sed -i 's/I386_PC = y/I386_PC = n/' Makefile
 sed -i 's/ARM_RPI = n/ARM_RPI = y/' Makefile
@@ -123,8 +123,7 @@ cp rtl8188fu.ko ../wireless
 cd ..
 rm -rf rtl8188fu
 
-
-git clone https://github.com/lwfinger/rtl8192cu
+git clone https://github.com/Rick-Moba/rtl8192cu
 cd rtl8192cu
 export USER_EXTRA_CFLAGS="-DCONFIG_LITTLE_ENDIAN -Wno-error=incompatible-pointer-types"
 sed -i 's/I386_PC = y/I386_PC = n/' Makefile
@@ -132,8 +131,6 @@ sed -i 's/ARM_RPI = n/ARM_RPI = y/' Makefile
 sed -i 's/KVER *:= $(shell uname -r)/KVER ?= $(shell uname -r)/' Makefile
 sed -i 's/KSRC *:= /KSRC ?= /' Makefile
 sed -i 's/CROSS_COMPILE *:=/CROSS_COMPILE ?=/' Makefile
-sed -i 's/MODULE_NAME = rtl8192cu/MODULE_NAME = 8192cu/' Makefile
-sed -i 's|hal/\$(MODULE_NAME)|hal/rtl8192cu|' Makefile
 make -j 8
 unset USER_EXTRA_CFLAGS
 cp 8192cu.ko ../wireless
@@ -188,4 +185,4 @@ cd ..
 rm -rf rtl8852au
 
 
-tar -czf wireless-${BASEVER}.tgz wireless
+tar -czf debs/wireless-${BASEVER}.tgz wireless
