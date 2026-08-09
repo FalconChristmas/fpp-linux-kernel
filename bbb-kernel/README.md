@@ -3,7 +3,7 @@
 The `.deb` packages in `../debs/` are built from FPP's fork of Robert Nelson's
 `bb-kernel` build scripts:
 
-    https://github.com/FalconChristmas/bb-kernel        (branch: am33x-v6.18)
+    https://github.com/FalconChristmas/bb-kernel        (branch: am33x-v7.1)
 
 That repo is **not** a kernel source tree.  It is a set of scripts that clone
 the upstream linux-stable tree, apply the BeagleBoard.org patch set plus FPP's
@@ -16,7 +16,7 @@ the shipped `linux-image` deb.  **They are not the input to a build** -- the
 authoritative config lives in the bb-kernel repo as `patches/defconfig`, which
 `build_kernel.sh` copies to `.config` and runs `olddefconfig` over.
 
-Current release: **6.18.42-fpp46**
+Current release: **7.1.6-fpp16**
 
 ## Layout
 
@@ -32,8 +32,8 @@ Upstream (`RobertCNelson/bb-kernel`) tags a new `-boneNN` build every few weeks.
 FPP's changes sit as commits on top, so updating is a rebase:
 
     cd bb-kernel
-    git fetch origin am33x-v6.18
-    git rebase origin/am33x-v6.18
+    git fetch origin am33x-v7.1
+    git rebase origin/am33x-v7.1
 
 Expect conflicts in two files, both resolved the same way every time:
 
@@ -48,11 +48,19 @@ Expect conflicts in two files, both resolved the same way every time:
 for FPP's three local changes, which must survive the rebase:
 
     build_prefix="-fpp"       # upstream is "-bone"
-    toolchain="gcc_14_arm"
     #DISTRO=xross             # commented out
 
-`KERNEL_TAG` and `BUILD` come from upstream (e.g. `6.18.42` / `46`), which is
-what makes the version `6.18.42-fpp46`.
+(The 6.18 branch also pinned `toolchain="gcc_14_arm"`; the 7.1 branch keeps
+upstream's selection, since release debs are built with the chroot's native
+armhf gcc and the crosstool only affects host test builds.)
+
+`KERNEL_TAG` and `BUILD` normally come from upstream (e.g. `7.1.6` / `15`),
+which is what makes the version `7.1.6-fpp15`.  They diverge once FPP produces
+more than one build from the same upstream base: 7.1.6-fpp16 is a second build
+of upstream's bone15, so the numbers no longer match.  Bump `BUILD` whenever a
+rebuild would otherwise reuse a version string, since the deb filename,
+`/boot/vmlinuz-*`, `/lib/modules/*` and `uname -r` are all derived from it and
+installing a same-named deb silently replaces the previous kernel.
 
 Before building, verify the patch series still applies.  A full `patch.sh` run
 against a clean checkout of the new tag catches this in minutes rather than
@@ -129,8 +137,8 @@ Filter out `CONFIG_{CC,GCC,AS,LD,CLANG,LLD,RUSTC,PAHOLE}_*` -- those record the
 build toolchain, not intent, and always differ (the reference is built with the
 crosstool, the release inside the armhf chroot).
 
-As of 6.18.42-fpp46 that comparison yields roughly **2000 changed settings**,
-plus ~1600 symbols present only in FPP's config and ~1200 only in upstream's
+As of 7.1.6-fpp16 that comparison yields roughly **2000 changed settings**,
+plus ~1650 symbols present only in FPP's config and ~1220 only in upstream's
 (disabling a subsystem removes its children from the file entirely).  The
 counts below are from that release.
 
@@ -194,6 +202,23 @@ drivers for those parts (`CACHE_L2X0`, `ARM_ERRATA_*`, `TWL4030_CORE`,
   **modules** -- the dummy card is a fallback that should only ever load on
   demand.
 
+### USB / MUSB
+
+`CONFIG_MUSB_PIO_ONLY=y` -- USB transfers are done by the CPU, with the CPPI 4.1
+DMA engine unused.  Do **not** "fix" this by enabling DMA.  Mainline's generic
+`omap2plus_defconfig` does enable it, and comparing against that file makes the
+setting look like an FPP deviation, but it is not: rcn's own
+`patches/debian.config` enables DMA and `patches/beagle.config` deliberately
+overrides it back to PIO for BeagleBone specifically, on every branch through
+the current 7.2.  It traces to 3.11/3.13-era commits fighting MUSB bringup.
+
+This was tried and reverted for 7.1.6.  Enabling DMA measurably changed nothing:
+boot time moved 0.1 s against a 0.5 s spread, and the intermittent USB wifi
+wedge occurred at the same rate with DMA on and off.  `TI_CPPI41=y` is built in
+regardless -- only MUSB is barred from using it.  Note DMA is runtime
+switchable when compiled in (`musb_hdrc.use_dma=0`), so it can be A/B tested
+without a rebuild.
+
 ### Removed
 
 Beyond the other-SoC drivers above: `WATCHDOG`, `CAN`, `KEXEC`, `DEBUG_KERNEL`,
@@ -226,5 +251,5 @@ the previous release's `config-*` here before shipping.
 
 Note that `CONFIG_LOCALVERSION` is empty in the shipped config.  The `-fppNN`
 suffix comes from `build_prefix` in `version.sh`, which reaches the build as
-`LOCALVERSION=-fpp46` on the make command line.  Do not set it in the config as
+`LOCALVERSION=-fpp16` on the make command line.  Do not set it in the config as
 well -- you will get it twice.
