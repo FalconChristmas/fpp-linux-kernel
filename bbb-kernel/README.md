@@ -1,118 +1,230 @@
-# Build Instructions
-There are two options for building the Linux kernel.   The fastest is by cross compiling
-from a Debian Linux and copying the result over to the Beagle.  This is much faster
-for testing, but cannot be used for creating the deb files needed for "release".  For 
-release, the debs must be built on an armv7 device.  The fastest option is to use
-a Beaglebone AI to build the deb, but it can be done on a Beaglebone Black, just much
-slower.
+# FPP BeagleBone Kernel
 
-It will require a significant amount of memory.   Thus, a swapfile will need to be created:
-sudo fallocate -l 2G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-sudo sysctl vm.swappiness=10
+The `.deb` packages in `../debs/` are built from FPP's fork of Robert Nelson's
+`bb-kernel` build scripts:
 
+    https://github.com/FalconChristmas/bb-kernel        (branch: am33x-v6.18)
 
-# Required Kernel Changes
-The first step is to checkout the latest Beaglebone kernel sources via:
-git clone https://openbeagle.org/RobertCNelson/bb-kernel
-Then swith to the appropriate tag.  For example:
-git checkout am33x-v6.7
+That repo is **not** a kernel source tree.  It is a set of scripts that clone
+the upstream linux-stable tree, apply the BeagleBoard.org patch set plus FPP's
+own patches, and build Debian packages.  The kernel source itself is downloaded
+on first build into `ignore/linux-src`.
 
-Copy our latest config for a beagle to:
-patches/defconfig
-patches/ref_omap2plus_defconfig
+The `config-*` files in this directory are a record of what each released
+kernel was built with.  They are copies of `/boot/config-<version>` taken from
+the shipped `linux-image` deb.  **They are not the input to a build** -- the
+authoritative config lives in the bb-kernel repo as `patches/defconfig`, which
+`build_kernel.sh` copies to `.config` and runs `olddefconfig` over.
 
-Edit version.sh to change:
-build_prefix="-fpp"
-toolchain="gcc_12_arm"
-comment out DISTRO=
+Current release: **6.18.42-fpp46**
 
-Run ./build_deb.sh
+## Layout
 
-If you need to completely recreate the config, the options we need are:
-* General Setup -> 
-  * Disable initrd support - we dont use it, slows boot down a bit
-  * Local Version -> -fpp
-   (note: the dash prefix is important)
-* Kernel Features
-  * Increase timer to 500hz
-  * Disable SMP support - beaglebone blacks are single core
-* CPU Power Management 
- * CPU Frequency scaling, turn on performance governor and turn off everything else.  Make
-   sure the "TI CPUFreq" support is off and Generic DT based cpufreq driver.  We need
-   to keep the cpu locked at 100%
- * CPU Idle PM support - turn completely off
-* Power management options
- * turn off Susupend to RAM and standby
- * turn off hibernate
-* Network support
- * turn off CAN bus subsystem 
- * turn off amateur radio support
- * Networking support > Networking options > Network packet filtering framework (Netfilter) > Core Netfilter Configuration
-   * Netfilter nf_tables support to builting instead of module
-   *  Netfilter connection tracking support -> builtin
-   * Netfilter nf_tables conntrack module -> built in
-   * Netfilter nf_tables nat module -> builtin
-*  Networking support > Networking options > Network packet filtering framework (Netfilter) > IP: Netfilter Configuration
-  * IP tables support (required for filtering/masq/NAT) -> built in
-  * ARP nf_tables support -> built in
-  * Packet mangling -> built in
-  * iptables NAT support -> built in
-* Networking support > Networking options > Network packet filtering framework (Netfilter) > IPv6: Netfilter Configuration
-  *  IP6 tables support (required for filtering) -> built in
-  * ip6tables NAT support -> builtin
- * Convert from modules to builtin
- * Device Drivers -> Input Device Support
-   * Event Interface -> * built in
- * Device Drivers -> SPI Support
-   * Usermode SPI Driver -> * built in
- * Device Drivers -> Networkd Device Support -> USB Network Adapters
-   * Change RTL* options to * instead of M (faster boot on pocketbeagle)
- * Device Drivers -> Hardware Monitoring
-   * Change LM75 to *
-* Device Drivers 
- * Turn OFF "Watchdog Timer Support"
-* Device Drivers-> Sound Card -> Sound Card Support -> ALSA -> USB Sound Devices
-  * Change USB Audio/Mido from M to * (faster boot with USB sound card)
-* Device Drivers -> Real Time Clock
- * Turn OFF the TI OMAP RTC
-* Device drivers -> Remoteproc drivers
-  * Turn OFF AMx3xx Wakeup M3 remoteproc support
-* Device Drivers -> Pulse  Width Modulation
- * Turn OFF the OMAP Dual Mode Timer PWM
- * pca9685 -> module
-  
+| path | contents |
+| --- | --- |
+| `../debs/linux-image-<ver>_1_armhf.deb` | kernel, modules, dtbs -- installed by the SD build |
+| `../debs/linux-headers-<ver>_1_armhf.deb` | headers, for building out-of-tree modules on-device |
+| `bbb-kernel/config-<ver>_1` | the config that kernel shipped with |
 
-# Building on Beaglebone
-Building on the beaglebone is easy, just type:
-make bindeb-pkg
-That will take a long time and build the debs one level up.  If running on the AI, add 
-a "-j 2" to use the two cores and speed up the build.
+## Updating to a newer upstream release
 
-# Cross compiling:
-You need to install a bunch of tools first. 
+Upstream (`RobertCNelson/bb-kernel`) tags a new `-boneNN` build every few weeks.
+FPP's changes sit as commits on top, so updating is a rebase:
 
-sudo apt-get install gcc-arm-linux-gnueabi flex bison libssl-dev
+    cd bb-kernel
+    git fetch origin am33x-v6.18
+    git rebase origin/am33x-v6.18
 
-You should then be able to do the menuconfig via:
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabi- menuconfig
+Expect conflicts in two files, both resolved the same way every time:
 
-And then build the kernel via:
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabi- LOADADDR=0x80000000 uImage dtbs modules -j 6
+* `patches/defconfig` -- **keep FPP's**.  It wholesale-replaces upstream's
+  config, so upstream's edits to it are irrelevant.  `olddefconfig` reconciles
+  it against the new kernel version at build time.
+* `patches/ref_omap2plus_defconfig` -- **keep upstream's**.  Nothing reads this
+  file; it is a reference artifact.  Letting a local build's toolchain strings
+  land in it creates a conflict on every future rebase for no benefit.
 
-To prepare everything for transfer to the Beagle:
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabi- INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH=/tmp/rootfs modules_install
-VERSION=4.19.106fpp+
-mkdir /tmp/rootfs/boot
-cp arch/arm/boot/zImage /tmp/rootfs/boot/vmlinuz-$VERSION
-cp System.map /tmp/rootfs/boot/System.map-$VERSION
-mkdir /tmp/rootfs/boot/dtbs
-mkdir /tmp/rootfs/boot/dtbs/$VERSION
-cp arch/arm/boot/dts/*.dtb /tmp/rootfs/boot/dtbs/$VERSION
+`version.sh` carries the version and is normally taken from upstream, except
+for FPP's three local changes, which must survive the rebase:
 
-then rsync the /tmp/rootfs over to the beagle.
+    build_prefix="-fpp"       # upstream is "-bone"
+    toolchain="gcc_14_arm"
+    #DISTRO=xross             # commented out
 
+`KERNEL_TAG` and `BUILD` come from upstream (e.g. `6.18.42` / `46`), which is
+what makes the version `6.18.42-fpp46`.
 
+Before building, verify the patch series still applies.  A full `patch.sh` run
+against a clean checkout of the new tag catches this in minutes rather than
+after an hour of compiling -- the FPP device-tree patches append to
+`am335x-bone-common.dtsi`, which the BeagleBoard.org patch set also rewrites.
 
+## Building the release debs
+
+    cd bb-kernel
+    sudo ./tools/qemu-armhf-build.sh
+
+This builds inside an **armhf userspace**, which is required for release: a
+cross-compile bakes the build host's architecture into the `linux-headers`
+package (`fixdep`, `objtool`, `resolve_btfids`), which then fails when someone
+builds a module on the Beagle.  Building in an armhf rootfs avoids that.
+
+* On an **aarch64** host the CPU runs aarch32 directly -- full native speed, no
+  emulation.  This is by far the fastest option.
+* On an **x86_64** host it runs under `qemu-user-static` (needs
+  `qemu-user-static` and `binfmt-support` installed).  Correct, but slow.
+
+The script bind-mounts the working tree into the chroot, so whatever you have
+checked out is what gets built.  Packages land in `bb-kernel/deploy/`.  Useful
+flags:
+
+    --menuconfig        review/edit the config before the (long) compile
+    --refresh           re-check the FPP nightly release for a newer base image
+    --rootfs DIR        reuse an existing armhf rootfs
+
+For quick iteration you can cross-compile a kernel without packaging it
+(`./build_kernel.sh`, then `./tools/rebuild.sh` for subsequent runs), but do
+not ship debs produced that way.
+
+## Publishing a new kernel
+
+1. Copy both debs into `../debs/`.
+2. Extract the config the kernel actually shipped with and save it here:
+
+       dpkg-deb -x ../debs/linux-image-<ver>_1_armhf.deb /tmp/k
+       cp /tmp/k/boot/config-<ver> config-<ver>_1
+
+3. Point the SD image build at it -- in the `fpp` repo, `SD/build-image-bbb.sh`:
+
+       FPP_KERNEL_VER="${FPP_KERNEL_VER:-<ver>_1}"
+
+   Only the `linux-image` deb is fetched by that script; the headers deb is
+   published here for on-device module builds.
+4. Commit the debs, the config, and the SD script change together.
+
+## FPP-specific configuration
+
+The config is tuned for a single-core AM335x that has to hit hard real-time
+deadlines driving pixels, and for boot speed.  `patches/defconfig` in bb-kernel
+is the source of truth; what follows describes how it differs from upstream and
+why.
+
+### Comparing against upstream
+
+The reference point is `patches/ref_omap2plus_defconfig` in bb-kernel, which is
+`make omap2plus_defconfig` for the same kernel version, regenerated by upstream
+each release.  To regenerate the full inventory rather than trusting this list:
+
+```sh
+norm() {
+    grep -E '^(CONFIG_[A-Z0-9_]+=|# CONFIG_[A-Z0-9_]+ is not set)' "$1" |
+        sed -E 's/^# (CONFIG_[A-Z0-9_]+) is not set/\1=n/' | sort
+}
+norm bbb-kernel/config-<ver>_1            > /tmp/fpp.cfg
+norm ../bb-kernel/patches/ref_omap2plus_defconfig > /tmp/ref.cfg
+diff /tmp/ref.cfg /tmp/fpp.cfg
+```
+
+Filter out `CONFIG_{CC,GCC,AS,LD,CLANG,LLD,RUSTC,PAHOLE}_*` -- those record the
+build toolchain, not intent, and always differ (the reference is built with the
+crosstool, the release inside the armhf chroot).
+
+As of 6.18.42-fpp46 that comparison yields roughly **2000 changed settings**,
+plus ~1600 symbols present only in FPP's config and ~1200 only in upstream's
+(disabling a subsystem removes its children from the file entirely).  The
+counts below are from that release.
+
+### Platform scope
+
+Upstream `omap2plus_defconfig` is a multi-SoC config covering OMAP3/4/5, AM43xx
+and DRA7xx.  FPP builds **AM335x only**, which is the single largest source of
+difference: `ARCH_OMAP3`, `ARCH_OMAP4`, `ARCH_MULTI_V6`, `SOC_AM43XX`,
+`SOC_DRA7XX`, `SOC_OMAP5` are all off, and with them the errata workarounds and
+drivers for those parts (`CACHE_L2X0`, `ARM_ERRATA_*`, `TWL4030_CORE`,
+`MFD_PALMAS`, `DRM_OMAP`, `USB_DWC3`, `PCI`, `ATA`, ...).
+
+### Latency and timing
+
+* `CONFIG_PREEMPT=y` -- upstream ships `PREEMPT_NONE`.  The low-latency
+  preemptible model matters for holding output timing.
+* `CONFIG_HZ=500` (`HZ_500`) -- upstream is `HZ_100`.
+* `CONFIG_SMP` off -- the BBB is single-core.
+* `CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y`; the ondemand, conservative,
+  powersave and userspace governors, `ARM_TI_CPUFREQ`, `CPUFREQ_DT` and
+  `CPUFREQ_DT_PLATDEV` are all off -- the CPU stays pinned at full speed,
+  because frequency transitions show up as frame jitter.
+* `CONFIG_CPU_IDLE` off and `CONFIG_SUSPEND` off -- idle-state exit latency is
+  the same problem, and neither is wanted on an always-on controller.
+  (`HIBERNATION` is already off upstream.)
+* `CONFIG_WKUP_M3_RPROC` off -- the CM3 power-management firmware only exists
+  to serve suspend, which is disabled.
+
+### Boot speed
+
+* `CONFIG_BLK_DEV_INITRD` off -- FPP does not use an initrd.
+* About **150 drivers are built in that upstream ships as modules**, so they
+  register during initcalls instead of waiting on udev.  By area:
+  * **Audio** -- `SOUND`, `SND`, `SND_PCM`, `SND_TIMER`, `SND_SOC`,
+    `SND_SOC_DAVINCI_MCASP`, `SND_SOC_PCM5102A`,
+    `SND_SOC_TI_{EDMA,SDMA,UDMA}_PCM`, `SND_SIMPLE_CARD{,_UTILS}`,
+    `SND_USB_AUDIO`.  `SND_SOC` **must** be `y` for any of the others to be --
+    no ASoC driver can be built in while the core is a module.  As modules the
+    cape card bound only after udev had loaded every piece in turn, so it could
+    appear after FPP had already probed for it and fallen back to `snd-dummy`.
+  * **Wireless** -- `RFKILL`, `CFG80211`, `MAC80211`.  `RFKILL` has to be `y`
+    first: cfg80211 is `depends on RFKILL || !RFKILL`, which silently caps it
+    at `m` while rfkill is a module.
+  * **USB** -- the whole MUSB + gadget stack (`USB`, `USB_MUSB_HDRC`,
+    `USB_MUSB_DSPS`, `USB_GADGET`, `USB_LIBCOMPOSITE`, all `USB_F_*`
+    functions), plus `USB_USBNET`, `USB_NET_SMSC95XX` and the RTL USB ethernet
+    drivers (`USB_RTL8150`, `USB_RTL8152`).
+  * **Display** -- `DRM`, `DRM_KMS_HELPER`, `DRM_TILCDC`, `DRM_I2C_NXP_TDA998X`
+    (HDMI), `DRM_TI_TFP410`.
+  * **Crypto** -- the AES/SHA/HMAC/DRBG suite and the OMAP hardware
+    accelerators (`CRYPTO_DEV_OMAP_{AES,DES,SHAM}`), so disk/network crypto
+    does not pull modules in mid-boot.
+  * **GPIO / I2C / SPI / sensors** -- `INPUT_EVDEV`, `SPI_SPIDEV`, `SPI_GPIO`,
+    `GPIO_PCA953X`, `EEPROM_AT24`, `SENSORS_LM75`, `RTC_DRV_DS1307`, `IIO`,
+    `TI_AM335X_ADC`, `MFD_TI_AM335X_TSCADC`, `TI_EQEP`.
+  * **LEDs / backlight** -- `LEDS_CLASS`, `LEDS_GPIO`, `LEDS_PWM` and the
+    common triggers.
+  * **Swap** -- `ZRAM` and `ZSMALLOC` (upstream ships ZRAM as a module); FPP
+    sets up zram swap early in boot.
+* `CONFIG_SND_DUMMY` and `CONFIG_SND_SEQ_DUMMY` are deliberately left as
+  **modules** -- the dummy card is a fallback that should only ever load on
+  demand.
+
+### Removed
+
+Beyond the other-SoC drivers above: `WATCHDOG`, `CAN`, `KEXEC`, `DEBUG_KERNEL`,
+`EXPERT`, `RUNTIME_TESTING_MENU`, `MODVERSIONS`, `PM_DEBUG`, `SND_DEBUG`,
+`EXT2_FS`, `CRAMFS`, `INPUT_MOUSEDEV`, `KEYBOARD_ATKBD`, and the USB host
+controllers the BBB does not have (`USB_EHCI_HCD`, `USB_OHCI_HCD`,
+`USB_XHCI_HCD`, `USB_DWC3`).
+
+`CONFIG_RTC_DRV_OMAP` is off -- the on-SoC RTC is not battery-backed; capes
+provide a real one (`RTC_DRV_DS1307` is built in).
+
+`CONFIG_PWM_OMAP_DMTIMER` is off; `PWM_TIECAP` and `PWM_TIEHRPWM` are built in
+and `PWM_PCA9685` is a module.
+
+### Netfilter
+
+`NETFILTER_XTABLES` and `IP6_NF_IPTABLES` are built in, but `NF_TABLES` and
+`IP_NF_IPTABLES` ship as **modules** (`NF_TABLES` is a module upstream too).
+An earlier revision of this document instructed making the whole netfilter
+stack built-in; that was never actually done, and the shipped configs have
+never matched it.
+
+## Regenerating the config from scratch
+
+Normally you should not -- carry `patches/defconfig` forward and let
+`olddefconfig` reconcile it against each new kernel version.  If you do need to
+start over, build a config with `--menuconfig`, apply the settings above, then
+copy the resulting `.config` back to `patches/defconfig` and diff it against
+the previous release's `config-*` here before shipping.
+
+Note that `CONFIG_LOCALVERSION` is empty in the shipped config.  The `-fppNN`
+suffix comes from `build_prefix` in `version.sh`, which reaches the build as
+`LOCALVERSION=-fpp46` on the make command line.  Do not set it in the config as
+well -- you will get it twice.
