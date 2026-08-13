@@ -16,7 +16,7 @@ the shipped `linux-image` deb.  **They are not the input to a build** -- the
 authoritative config lives in the bb-kernel repo as `patches/defconfig`, which
 `build_kernel.sh` copies to `.config` and runs `olddefconfig` over.
 
-Current release: **7.1.6-fpp16**
+Current release: **7.1.6-fpp17**
 
 ## Layout
 
@@ -56,8 +56,8 @@ armhf gcc and the crosstool only affects host test builds.)
 
 `KERNEL_TAG` and `BUILD` normally come from upstream (e.g. `7.1.6` / `15`),
 which is what makes the version `7.1.6-fpp15`.  They diverge once FPP produces
-more than one build from the same upstream base: 7.1.6-fpp16 is a second build
-of upstream's bone15, so the numbers no longer match.  Bump `BUILD` whenever a
+more than one build from the same upstream base: 7.1.6-fpp16 and -fpp17 are
+rebuilds of upstream's bone15, so the numbers no longer match.  Bump `BUILD` whenever a
 rebuild would otherwise reuse a version string, since the deb filename,
 `/boot/vmlinuz-*`, `/lib/modules/*` and `uname -r` are all derived from it and
 installing a same-named deb silently replaces the previous kernel.
@@ -137,7 +137,7 @@ Filter out `CONFIG_{CC,GCC,AS,LD,CLANG,LLD,RUSTC,PAHOLE}_*` -- those record the
 build toolchain, not intent, and always differ (the reference is built with the
 crosstool, the release inside the armhf chroot).
 
-As of 7.1.6-fpp16 that comparison yields roughly **2000 changed settings**,
+As of 7.1.6-fpp17 that comparison yields roughly **2000 changed settings**,
 plus ~1650 symbols present only in FPP's config and ~1220 only in upstream's
 (disabling a subsystem removes its children from the file entirely).  The
 counts below are from that release.
@@ -202,6 +202,22 @@ drivers for those parts (`CACHE_L2X0`, `ARM_ERRATA_*`, `TWL4030_CORE`,
   **modules** -- the dummy card is a fallback that should only ever load on
   demand.
 
+### Root filesystem
+
+`CONFIG_BTRFS_FS=y` -- built in, not a module, because `CONFIG_BLK_DEV_INITRD`
+is off.  With no initramfs there is nothing to load a root filesystem module
+from, so any filesystem that can hold `/` must be compiled in.  This exists for
+btrfs root on the small (4 GB) BeagleBone eMMCs, where `compress=zstd` buys
+back meaningful space.
+
+`CONFIG_ZSTD_{COMMON,COMPRESS,DECOMPRESS}=y` were already built in before btrfs
+was (other users pull them in, notably zram's zstd backend), and `BTRFS_FS`
+selects them anyway.  `RAID6_PQ` and `XOR_BLOCKS` are `y` only because btrfs
+selects them.
+
+`CONFIG_EXT4_FS=y` stays built in -- existing ext4 images, and `/boot` on a
+separate ext4 partition in the btrfs layout.
+
 ### USB / MUSB
 
 `CONFIG_MUSB_PIO_ONLY=y` -- USB transfers are done by the CPU, with the CPPI 4.1
@@ -251,5 +267,5 @@ the previous release's `config-*` here before shipping.
 
 Note that `CONFIG_LOCALVERSION` is empty in the shipped config.  The `-fppNN`
 suffix comes from `build_prefix` in `version.sh`, which reaches the build as
-`LOCALVERSION=-fpp16` on the make command line.  Do not set it in the config as
+`LOCALVERSION=-fpp17` on the make command line.  Do not set it in the config as
 well -- you will get it twice.
